@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import gunService from '../services/gunService'
+import { withCache, invalidateCache } from '../utils/queryCache'
 
 // ---------------------------------------------------------------------------
 // useGuns — fetch the paginated / filtered product list from the API.
 //
 // Returns { guns, loading, error, pagination, refetch }.
-// When the API is unreachable the `error` string will be set and `guns`
-// will remain an empty array so the UI can show a proper error state.
+// Now features query caching (1 min TTL) to avoid redundant network calls.
 // ---------------------------------------------------------------------------
 
 export function useGuns(params = {}) {
@@ -17,13 +17,25 @@ export function useGuns(params = {}) {
 
   // Serialise params so the effect re-runs when they change.
   const paramKey = JSON.stringify(params)
+  const cacheKey = `guns:list:${paramKey}`
 
-  const fetchGuns = useCallback(async () => {
+  const fetchGuns = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError(null)
 
-      const response = await gunService.getGuns(params)
+      // Bypass cache if forceRefresh
+      let response
+      if (forceRefresh) {
+        invalidateCache(cacheKey)
+        response = await gunService.getGuns(params)
+        // Cache fresh result
+        import('../utils/queryCache').then(({ setCached }) => {
+          setCached(cacheKey, response)
+        })
+      } else {
+        response = await withCache(cacheKey, () => gunService.getGuns(params))
+      }
 
       if (response.success) {
         setGuns(response.data || [])
@@ -44,21 +56,22 @@ export function useGuns(params = {}) {
     fetchGuns()
   }, [fetchGuns])
 
-  return { guns, loading, error, pagination, refetch: fetchGuns }
+  const refetch = useCallback(() => fetchGuns(true), [fetchGuns])
+
+  return { guns, loading, error, pagination, refetch }
 }
 
 // ---------------------------------------------------------------------------
-// useGunById — fetch a single product by its UUID.
-//
-// Returns { gun, loading, error, refetch }.
+// useGunById — fetch a single product by its UUID (with caching).
 // ---------------------------------------------------------------------------
 
 export function useGunById(id) {
   const [gun, setGun] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const cacheKey = `guns:detail:${id}`
 
-  const fetchGun = useCallback(async () => {
+  const fetchGun = useCallback(async (forceRefresh = false) => {
     if (!id) {
       setLoading(false)
       return
@@ -67,7 +80,13 @@ export function useGunById(id) {
       setLoading(true)
       setError(null)
 
-      const response = await gunService.getGunById(id)
+      let response
+      if (forceRefresh) {
+        invalidateCache(cacheKey)
+        response = await gunService.getGunById(id)
+      } else {
+        response = await withCache(cacheKey, () => gunService.getGunById(id))
+      }
 
       if (response.success) {
         setGun(response.data)
@@ -80,11 +99,13 @@ export function useGunById(id) {
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [id, cacheKey])
 
   useEffect(() => {
     fetchGun()
   }, [fetchGun])
 
-  return { gun, loading, error, refetch: fetchGun }
+  const refetch = useCallback(() => fetchGun(true), [fetchGun])
+
+  return { gun, loading, error, refetch }
 }

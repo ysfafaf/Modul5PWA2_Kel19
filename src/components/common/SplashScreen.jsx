@@ -82,7 +82,7 @@ export default function SplashScreen({ onFinish, duration = 5400 }) {
       {/* Gunshop Asli Ngawi cropped emblem */}
       <img
         className="splash-mark"
-        src="/logo.png"
+        src="/newlogo.png"
         alt="Bore & Barrel Gunshop Asli Ngawi Logo"
       />
 

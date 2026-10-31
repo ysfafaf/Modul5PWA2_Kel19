@@ -1,4 +1,6 @@
+import { ShoppingCart, X } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
+import { useCart } from '../../hooks/useCart'
 import { formatPrice, truncate } from '../../utils/helpers'
 
 /**
@@ -15,6 +17,15 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
+
+  const { addToCart, removeFromCart, isInCart } = useCart()
+  const inCart = isInCart(gun.id || gun.name)
+
+  const handleCartClick = (e) => {
+    e.stopPropagation()
+    if (inCart) removeFromCart(gun.id || gun.name)
+    else addToCart(gun)
+  }
 
   return (
     <li className="card">
@@ -50,6 +61,17 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
       {/* Floating actions row */}
       <div className="card-actions">
         <FavoriteButton gunId={gun.id || gun.name} />
+
+        {/* Cart button */}
+        <button
+          type="button"
+          className={`card-act-btn${inCart ? ' card-act-btn--cart-active' : ''}`}
+          onClick={handleCartClick}
+          aria-label={inCart ? `Remove ${gun.name} from cart` : `Add ${gun.name} to cart`}
+          title={inCart ? 'Remove from cart' : 'Add to cart'}
+        >
+          {inCart ? <X size={15} /> : <ShoppingCart size={15} />}
+        </button>
 
         {onEdit && (
           <button

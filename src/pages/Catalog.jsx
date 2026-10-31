@@ -6,7 +6,7 @@ import GunCard from '../components/gun/GunCard'
 import GunDetail from '../components/gun/GunDetail'
 import AdvancedFilter from '../components/common/AdvancedFilter'
 import ConfirmModal from '../components/modals/ConfirmModal'
-import gunService from '../services/gunService'
+import archiveService from '../services/archiveService'
 import {
   matchesSearch,
   matchesCategory,
@@ -28,14 +28,22 @@ export default function Catalog({ onNavigate }) {
   const { guns: apiGuns, loading, error, refetch } = useGuns({ limit: 50 })
   const [useLocal, setUseLocal] = useState(false)
 
-  // Decide data source
+  // ---- Hidden IDs: archived + permanently deleted (from localStorage) ----
+  const [hiddenIds, setHiddenIds] = useState(() => archiveService.getHiddenIds())
+
+  const refreshHiddenIds = () => setHiddenIds(archiveService.getHiddenIds())
+
+  // Decide data source, and filter out any archived guns immediately
   const rawGuns = useMemo(() => {
+    let base
     if (useLocal || (error && apiGuns.length === 0)) {
-      // Enrich local data with synthetic ids so FavoriteButton and detail work
-      return GUNS_LOCAL.map((g, i) => ({ ...g, id: g.id || `local-${i}` }))
+      base = GUNS_LOCAL.map((g, i) => ({ ...g, id: g.id || `local-${i}` }))
+    } else {
+      base = apiGuns
     }
-    return apiGuns
-  }, [apiGuns, error, useLocal])
+    // Hide archived AND permanently-deleted guns from the catalog view
+    return base.filter((g) => !hiddenIds.has(String(g.id ?? g.name)))
+  }, [apiGuns, error, useLocal, hiddenIds])
 
   // ---- filters / sort ----
   const [search, setSearch] = useState('')
@@ -60,19 +68,14 @@ export default function Catalog({ onNavigate }) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteTarget) return
-    try {
-      setDeleting(true)
-      setDeleteError('')
-      await gunService.deleteGun(deleteTarget.id)
-      setDeleteTarget(null)
-      refetch()
-    } catch (err) {
-      setDeleteError(err.message || 'Failed to delete.')
-    } finally {
-      setDeleting(false)
-    }
+    // Soft-delete: archive and immediately remove from the visible list
+    archiveService.archiveGun(deleteTarget)
+    // Optimistic update — refreshes both archived + permanently-deleted sets
+    refreshHiddenIds()
+    setDeleteTarget(null)
+    setSelectedGun(null)
   }
 
   // ---- If viewing a single product detail ----
@@ -192,12 +195,12 @@ export default function Catalog({ onNavigate }) {
         )}
       </section>
 
-      {/* Delete confirmation */}
+      {/* Archive (soft-delete) confirmation */}
       <ConfirmModal
         open={!!deleteTarget}
-        title="Delete Product"
-        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        title="Archive Product"
+        message={`Archive "${deleteTarget?.name}"? It will be moved to Archived and can be restored from your Profile.`}
+        confirmLabel="Archive"
         danger
         loading={deleting}
         onConfirm={handleDelete}
