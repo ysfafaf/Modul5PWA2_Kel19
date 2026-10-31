@@ -23,7 +23,7 @@ export function useReviews(gunId) {
 
       let response
       if (forceRefresh) {
-        invalidateCache(cacheKey)
+        await invalidateCache(cacheKey)
         response = await reviewService.getReviews(gunId)
       } else {
         response = await withCache(cacheKey, () => reviewService.getReviews(gunId), 30_000)
@@ -71,7 +71,7 @@ export function useCreateReview() {
       if (response.success) {
         setSuccess(true)
         // Invalidate the review cache for this gun
-        invalidateCache(`reviews:${gunId}`)
+        await invalidateCache(`reviews:${gunId}`)
         return response.data
       } else {
         setError(response.message || 'Failed to submit review.')
@@ -104,7 +104,7 @@ export function useUpdateReview() {
       const response = await reviewService.updateReview(reviewId, reviewData)
 
       if (response.success) {
-        invalidateCache(`reviews:${gunId}`)
+        await invalidateCache(`reviews:${gunId}`)
         return response.data
       } else {
         setError(response.message || 'Failed to update review.')
@@ -137,7 +137,7 @@ export function useDeleteReview() {
       const response = await reviewService.deleteReview(reviewId)
 
       if (response.success) {
-        invalidateCache(`reviews:${gunId}`)
+        await invalidateCache(`reviews:${gunId}`)
         return true
       } else {
         setError(response.message || 'Failed to delete review.')

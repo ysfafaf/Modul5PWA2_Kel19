@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import gunService from '../services/gunService'
-import { withCache, invalidateCache } from '../utils/queryCache'
+import { withCache, invalidateCache, setCached } from '../utils/queryCache'
 
 // ---------------------------------------------------------------------------
 // useGuns — fetch the paginated / filtered product list from the API.
 //
 // Returns { guns, loading, error, pagination, refetch }.
-// Now features query caching (1 min TTL) to avoid redundant network calls.
+// Cache menggunakan Cache Storage API → terlihat di Network tab & DevTools
+// Application → Cache Storage → "query-cache"
 // ---------------------------------------------------------------------------
 
 export function useGuns(params = {}) {
@@ -27,12 +28,11 @@ export function useGuns(params = {}) {
       // Bypass cache if forceRefresh
       let response
       if (forceRefresh) {
-        invalidateCache(cacheKey)
+        // invalidateCache sekarang async (Cache Storage API)
+        await invalidateCache(cacheKey)
         response = await gunService.getGuns(params)
-        // Cache fresh result
-        import('../utils/queryCache').then(({ setCached }) => {
-          setCached(cacheKey, response)
-        })
+        // Simpan hasil baru ke cache
+        await setCached(cacheKey, response)
       } else {
         response = await withCache(cacheKey, () => gunService.getGuns(params))
       }
@@ -82,8 +82,10 @@ export function useGunById(id) {
 
       let response
       if (forceRefresh) {
-        invalidateCache(cacheKey)
+        // invalidateCache sekarang async
+        await invalidateCache(cacheKey)
         response = await gunService.getGunById(id)
+        await setCached(cacheKey, response)
       } else {
         response = await withCache(cacheKey, () => gunService.getGunById(id))
       }
